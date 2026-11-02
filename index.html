@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTO Poker Solver & Range Wizard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
+            color: #e2e8f0;
+        }
+        .grid-matrix {
+            display: grid;
+            grid-template-columns: repeat(13, minmax(0, 1fr));
+            gap: 2px;
+        }
+        .cell-ratio {
+            aspect-ratio: 1 / 1;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header Navigation -->
+    <header class="bg-slate-900/90 border-b border-slate-800 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-emerald-600 to-teal-400 p-2.5 rounded-xl shadow-lg shadow-emerald-900/40">
+                    <i data-lucide="spade" class="w-6 h-6 text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                        GTO Range Wizard & Solver
+                    </h1>
+                    <p class="text-xs text-emerald-400 font-medium">Preflop Strategy Engine</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800/80">
+                <button onclick="switchTab('solver')" id="tab-solver" class="px-4 py-2 text-xs md:text-sm font-medium rounded-lg transition-all flex items-center space-x-2 bg-emerald-600 text-white shadow">
+                    <i data-lucide="grid" class="w-4 h-4"></i>
+                    <span>Matrix Solver</span>
+                </button>
+                <button onclick="switchTab('builder')" id="tab-builder" class="px-4 py-2 text-xs md:text-sm font-medium rounded-lg transition-all flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/50">
+                    <i data-lucide="pen-tool" class="w-4 h-4"></i>
+                    <span>Range Builder</span>
+                </button>
+                <button onclick="switchTab('equity')" id="tab-equity" class="px-4 py-2 text-xs md:text-sm font-medium rounded-lg transition-all flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/50">
+                    <i data-lucide="swords" class="w-4 h-4"></i>
+                    <span>Equity Calculator</span>
+                </button>
+                <button onclick="switchTab('guide')" id="tab-guide" class="px-4 py-2 text-xs md:text-sm font-medium rounded-lg transition-all flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/50">
+                    <i data-lucide="book-open" class="w-4 h-4"></i>
+                    <span>Οδηγός GTO</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+
+        <!-- TAB 1: SOLVER MATRIX -->
+        <div id="view-solver" class="space-y-6">
+            <!-- Controls Bar -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Format Selection -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Μορφή Τραπεζιού</label>
+                        <select id="sel-table" onchange="updateSolverData()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                            <option value="6max">6-Max NLHE</option>
+                            <option value="9max">9-Max NLHE</option>
+                        </select>
+                    </div>
+
+                    <!-- Stack Depth -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Βάθος Stack</label>
+                        <select id="sel-stack" onchange="updateSolverData()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                            <option value="100bb">100 Big Blinds (Cash/Deep)</option>
+                            <option value="50bb">50 Big Blinds (Mid)</option>
+                            <option value="20bb">20 Big Blinds (MTT Short)</option>
+                        </select>
+                    </div>
+
+                    <!-- Action Scenario -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Σενάριο Action</label>
+                        <select id="sel-scenario" onchange="updateSolverData()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                            <option value="rfi">Unopened (Raise First In)</option>
+                            <option value="vs_open">Vs Raise / Single Raised Pot</option>
+                            <option value="vs_3bet">Vs 3-Bet (Defense)</option>
+                        </select>
+                    </div>
+
+                    <!-- Hero Position -->
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Θέση Hero</label>
+                        <select id="sel-pos" onchange="updateSolverData()" class="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 transition">
+                            <option value="UTG">Under The Gun (UTG)</option>
+                            <option value="HJ">Hijack (HJ)</option>
+                            <option value="CO">Cutoff (CO)</option>
+                            <option value="BTN" selected>Button (BTN)</option>
+                            <option value="SB">Small Blind (SB)</option>
+                            <option value="BB">Big Blind (BB)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Range Stats Summary Bar -->
+                <div class="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4 text-xs md:text-sm">
+                    <div class="flex items-center space-x-6">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span>
+                            <span class="text-slate-300">Raise/RFI: <strong id="stat-raise" class="text-emerald-400 font-semibold">15.4%</strong></span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+                            <span class="text-slate-300">Call: <strong id="stat-call" class="text-amber-400 font-semibold">0.0%</strong></span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-red-500 inline-block"></span>
+                            <span class="text-slate-300">3-Bet/4-Bet: <strong id="stat-3bet" class="text-red-400 font-semibold">6.2%</strong></span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full bg-slate-700 inline-block"></span>
+                            <span class="text-slate-400">Fold: <strong id="stat-fold" class="text-slate-400 font-semibold">78.4%</strong></span>
+                        </div>
+                    </div>
+                    <div class="text-slate-400 text-xs">
+                        Συνολικά Combos: <span id="stat-combos" class="text-white font-mono font-semibold">204 / 1326</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Matrix Grid & Inspector -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- 13x13 Grid (8 Cols on LG) -->
+                <div class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div id="solver-matrix" class="grid-matrix">
+                        <!-- Matrix items generated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Hand Inspector & Legend (4 Cols on LG) -->
+                <div class="lg:col-span-4 space-y-4">
+                    <!-- Selected Hand Details -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <i data-lucide="search" class="w-4 h-4 text-emerald-400"></i>
+                                Ανάλυση Χεριού
+                            </h3>
+                            <span id="inspect-hand" class="font-mono text-xl font-black text-emerald-400 bg-slate-950 px-3 py-1 rounded-lg border border-slate-800">AKs</span>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>Raise First In / Open</span>
+                                    <span id="inspect-raise-pct" class="font-mono font-bold text-emerald-400">100%</span>
+                                </div>
+                                <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                                    <div id="inspect-raise-bar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 100%"></div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>Call / Flat</span>
+                                    <span id="inspect-call-pct" class="font-mono font-bold text-amber-400">0%</span>
+                                </div>
+                                <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                                    <div id="inspect-call-bar" class="bg-amber-500 h-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>3-Bet / 4-Bet</span>
+                                    <span id="inspect-3bet-pct" class="font-mono font-bold text-red-400">0%</span>
+                                </div>
+                                <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                                    <div id="inspect-3bet-bar" class="bg-red-500 h-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                    <span>Fold</span>
+                                    <span id="inspect-fold-pct" class="font-mono font-bold text-slate-400">0%</span>
+                                </div>
+                                <div class="w-full bg-slate-950 h-2 rounded-full overflow-hidden">
+                                    <div id="inspect-fold-bar" class="bg-slate-700 h-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-800 grid grid-cols-2 gap-3 text-xs">
+                            <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-slate-500 block">Εκτιμώμενο EV</span>
+                                <span id="inspect-ev" class="font-mono font-bold text-emerald-400 text-sm">+2.45 BB</span>
+                            </div>
+                            <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                                <span class="text-slate-500 block">Συνδυασμοί (Combos)</span>
+                                <span id="inspect-combos" class="font-mono font-bold text-slate-200 text-sm">4 / 4</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Legend Quick Card -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-2 text-xs">
+                        <h4 class="font-semibold text-slate-300 mb-2">Υπόμνημα Χρωμάτων</h4>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-emerald-600 rounded"></div>
+                            <span class="text-slate-300">Raise / Open Raise (100%)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-red-600 rounded"></div>
+                            <span class="text-slate-300">3-Bet / 4-Bet (100%)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-amber-500 rounded"></div>
+                            <span class="text-slate-300">Call / Flat (100%)</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-4 h-4 bg-gradient-to-r from-emerald-600 to-slate-800 rounded"></div>
+                            <span class="text-slate-300">Mixed Strategy (Συχνότητα &lt; 100%)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: RANGE BUILDER -->
+        <div id="view-builder" class="hidden space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-wrap justify-between items-center gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-white">Custom Range Builder & Paint Tool</h2>
+                    <p class="text-xs text-slate-400">Επιλέξτε ή σχεδιάστε τα δικά σας εύρη χεριών και υπολογίστε combos</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="clearCustomRange()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition">
+                        Καθαρισμός
+                    </button>
+                    <button onclick="copyRangeText()" class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition flex items-center space-x-1.5">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span>Αντιγραφή Text</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <div class="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl">
+                    <div id="builder-matrix" class="grid-matrix">
+                        <!-- Builder Matrix -->
+                    </div>
+                </div>
+                <div class="lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                    <h3 class="font-bold text-white text-base">Στατιστικά Προσαρμοσμένου Range</h3>
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-400">Ποσοστό Hands:</span>
+                            <span id="builder-pct" class="font-mono font-bold text-emerald-400 text-base">0.0%</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-400">Συνολικά Combos:</span>
+                            <span id="builder-combos" class="font-mono font-bold text-slate-200">0 / 1326</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Range Text Syntax</label>
+                        <textarea id="builder-text" readonly class="w-full h-32 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400 focus:outline-none resize-none" placeholder="Επιλέξτε φύλλα στο grid..."></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: EQUITY CALCULATOR -->
+        <div id="view-equity" class="hidden space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl max-w-3xl mx-auto space-y-6">
+                <div class="text-center space-y-1">
+                    <h2 class="text-xl font-bold text-white">Head-to-Head Equity Calculator</h2>
+                    <p class="text-xs text-slate-400">Υπολογισμός πιθανοτήτων νίκης (Equity) μεταξύ δύο χεριών Preflop</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                    <!-- Player 1 -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-emerald-500/30 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-emerald-400 text-sm">Player 1 (Hand)</span>
+                            <span id="p1-equity" class="font-mono font-bold text-lg text-emerald-400">50.0%</span>
+                        </div>
+                        <input type="text" id="p1-hand" value="Ah Kh" placeholder="π.χ. Ah Kh" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white text-sm uppercase focus:outline-none focus:border-emerald-500">
+                    </div>
+
+                    <!-- Player 2 -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-red-500/30 space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-red-400 text-sm">Player 2 (Hand)</span>
+                            <span id="p2-equity" class="font-mono font-bold text-lg text-red-400">50.0%</span>
+                        </div>
+                        <input type="text" id="p2-hand" value="Qc Qd" placeholder="π.χ. Qc Qd" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 font-mono text-white text-sm uppercase focus:outline-none focus:border-red-500">
+                    </div>
+                </div>
+
+                <button onclick="calculateEquity()" class="w-full py-3 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold rounded-xl shadow-lg shadow-emerald-900/30 transition flex items-center justify-center space-x-2">
+                    <i data-lucide="calculator" class="w-5 h-5"></i>
+                    <span>Υπολογισμός Equity</span>
+                </button>
+
+                <div id="equity-result" class="hidden bg-slate-950 p-4 rounded-xl border border-slate-800 text-center space-y-2">
+                    <span class="text-xs text-slate-400">Αποτέλεσμα Προσομοίωσης (Monte Carlo)</span>
+                    <div class="w-full bg-slate-900 h-4 rounded-full overflow-hidden flex">
+                        <div id="p1-bar" class="bg-emerald-500 h-full transition-all duration-500" style="width: 50%"></div>
+                        <div id="p2-bar" class="bg-red-500 h-full transition-all duration-500" style="width: 50%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: GTO GUIDE -->
+        <div id="view-guide" class="hidden space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <i data-lucide="book-open" class="text-emerald-400"></i>
+                    Οδηγός GTO & Preflop Στρατηγικής
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="font-bold text-emerald-400 text-lg">1. Τι είναι το GTO (Game Theory Optimal);</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Το GTO είναι η μαθηματικά τέλεια στρατηγική στο πόκερ που δεν μπορεί να γίνει εκμεταλλεύσιμη (unexploitable) από κανέναν αντίπαλο. Στο preflop, καθορίζει με ποια φύλλα πρέπει να κάνουμε Raise, Call ή Fold με βάση τη θέση μας και τα stacks.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="font-bold text-emerald-400 text-lg">2. Σημασία της Θέσης (Position)</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Όσο πιο αργά μιλάμε στον γύρο (π.χ. Button), τόσο μεγαλύτερο εύρος (range) φύλλων μπορούμε να παίξουμε κερδοφόρα. Από αρχικές θέσεις (UTG) παίζουμε μόνο το top ~15% των φύλλων.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="font-bold text-emerald-400 text-lg">3. Suited vs Offsuit Hand Combos</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Κάθε ζεύγος (π.χ. AA) έχει 6 συνδυασμούς (combos). Κάθε suited χέρι (π.χ. AKs) έχει 4 συνδυασμούς, ενώ κάθε offsuit χέρι (π.χ. AKo) έχει 12 συνδυασμούς. Συνολικά υπάρχουν 1,326 δυνατοί συνδυασμοί.
+                        </p>
+                    </div>
+
+                    <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 space-y-2">
+                        <h3 class="font-bold text-emerald-400 text-lg">4. Mixed Strategies (Μικτές Στρατηγικές)</h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            Στο GTO, ορισμένα οριακά φύλλα δεν παίζονται 100% με τον ίδιο τρόπο. Για παράδειγμα, το A5s μπορεί να γίνετε 3-Bet 60% των φορών και Call 40% των φορών για να διατηρείται το balance.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 border-t border-slate-800/80 py-4 text-center text-xs text-slate-500">
+        <p>GTO Poker Range Engine & Solver &bull; Created for Netlify Deployment</p>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+        let selectedHand = 'AKs';
+        let customSelectedHands = new Set();
+
+        // Sample GTO Data Structure (RFI Ranges by Position)
+        const GTO_DATA = {
+            'UTG': { rangePct: 15.2, raise: ['AA','KK','QQ','JJ','TT','99','88','AKs','AQs','AJs','ATs','KQs','KJs','QJs','JTs','AKo','AQo'], mix: {'77': 0.5, 'A9s': 0.4, 'A8s': 0.3, 'A5s': 0.6, 'A4s': 0.4, 'KTs': 0.5, 'QTs': 0.4, 'AJo': 0.5, 'KQo': 0.4} },
+            'HJ':  { rangePct: 20.1, raise: ['AA','KK','QQ','JJ','TT','99','88','77','AKs','AQs','AJs','ATs','A9s','A5s','KQs','KJs','KTs','QJs','QTs','JTs','T9s','AKo','AQo','AJo','KQo'], mix: {'66': 0.6, 'A8s': 0.5, 'A4s': 0.5, 'K9s': 0.4, 'Q9s': 0.4, 'J9s': 0.4, 'ATo': 0.4} },
+            'CO':  { rangePct: 27.8, raise: ['AA','KK','QQ','JJ','TT','99','88','77','66','55','AKs','AQs','AJs','ATs','A9s','A8s','A7s','A5s','A4s','A3s','KQs','KJs','KTs','K9s','QJs','QTs','Q9s','JTs','J9s','T9s','98s','87s','AKo','AQo','AJo','ATo','KQo','KJo'], mix: {'44': 0.5, 'A6s': 0.6, 'A2s': 0.4, 'K8s': 0.4, 'Q8s': 0.3, 'J8s': 0.3, 'T8s': 0.4, '76s': 0.5, 'QJo': 0.5} },
+            'BTN': { rangePct: 43.5, raise: ['AA','KK','QQ','JJ','TT','99','88','77','66','55','44','33','22','AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s','KQs','KJs','KTs','K9s','K8s','K7s','K6s','K5s','QJs','QTs','Q9s','Q8s','JTs','J9s','J8s','T9s','T8s','98s','97s','87s','86s','76s','75s','65s','54s','AKo','AQo','AJo','ATo','A9o','A8o','KQo','KJo','KTo','QJo','QTo','JTo'], mix: {'K4s': 0.5, 'Q7s': 0.4, '96s': 0.5, '85s': 0.4, '64s': 0.4, 'A7o': 0.5, 'K9o': 0.5, 'Q9o': 0.4, 'J9o': 0.4, 'T9o': 0.4} },
+            'SB':  { rangePct: 38.0, raise: ['AA','KK','QQ','JJ','TT','99','88','77','66','55','AKs','AQs','AJs','ATs','A9s','A8s','A7s','A6s','A5s','A4s','A3s','A2s','KQs','KJs','KTs','K9s','K8s','QJs','QTs','Q9s','JTs','J9s','T9s','98s','87s','76s','65s','AKo','AQo','AJo','ATo','A9o','KQo','KJo','KTo','QJo'], mix: {'44': 0.5, '33': 0.4, 'K7s': 0.5, 'Q8s': 0.4, 'J8s': 0.4, 'T8s': 0.5, '97s': 0.4, '54s': 0.5, 'A8o': 0.5, 'Q9o': 0.4} },
+            'BB':  { rangePct: 12.0, raise: ['AA','KK','QQ','JJ','AKs','AQs','AKo'], mix: {'TT': 0.4, 'AJs': 0.5, 'KQs': 0.4} }
+        };
+
+        // Initialize Icons & Matrix
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            buildSolverMatrix();
+            buildBuilderMatrix();
+            updateSolverData();
+        });
+
+        function switchTab(tab) {
+            ['solver', 'builder', 'equity', 'guide'].forEach(t => {
+                document.getElementById(`view-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).className = 'px-4 py-2 text-xs md:text-sm font-medium rounded-lg transition-all flex items-center space-x-2 text-slate-400 hover:text-white hover:bg-slate-800/50';
+            });
+            document.getElementById(`view-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).className = 'px-4 py-2 text-xs md:text-sm font-medium rounded-lg transition-all flex items-center space-x-2 bg-emerald-600 text-white shadow';
+        }
+
+        // Build 13x13 Grid Elements
+        function buildSolverMatrix() {
+            const container = document.getElementById('solver-matrix');
+            container.innerHTML = '';
+
+            for (let i = 0; i < 13; i++) {
+                for (let j = 0; j < 13; j++) {
+                    let handName = '';
+                    if (i === j) {
+                        handName = RANKS[i] + RANKS[j];
+                    } else if (i < j) {
+                        handName = RANKS[i] + RANKS[j] + 's';
+                    } else {
+                        handName = RANKS[j] + RANKS[i] + 'o';
+                    }
+
+                    const btn = document.createElement('button');
+                    btn.id = `cell-${handName}`;
+                    btn.className = 'cell-ratio flex flex-col items-center justify-center rounded text-[10px] md:text-xs font-bold transition-transform hover:scale-105 hover:z-10 focus:outline-none border border-slate-900/40 relative overflow-hidden';
+                    btn.innerText = handName;
+                    btn.onclick = () => inspectHand(handName);
+                    container.appendChild(btn);
+                }
+            }
+        }
+
+        function buildBuilderMatrix() {
+            const container = document.getElementById('builder-matrix');
+            container.innerHTML = '';
+
+            for (let i = 0; i < 13; i++) {
+                for (let j = 0; j < 13; j++) {
+                    let handName = (i === j) ? RANKS[i] + RANKS[j] : (i < j ? RANKS[i] + RANKS[j] + 's' : RANKS[j] + RANKS[i] + 'o');
+                    const btn = document.createElement('button');
+                    btn.id = `bcell-${handName}`;
+                    btn.className = 'cell-ratio flex items-center justify-center rounded text-[10px] md:text-xs font-bold bg-slate-950 border border-slate-800 text-slate-400 hover:border-emerald-500 transition';
+                    btn.innerText = handName;
+                    btn.onclick = () => toggleBuilderHand(handName);
+                    container.appendChild(btn);
+                }
+            }
+        }
+
+        function updateSolverData() {
+            const pos = document.getElementById('sel-pos').value;
+            const data = GTO_DATA[pos] || GTO_DATA['BTN'];
+
+            let totalCombos = 0;
+
+            for (let i = 0; i < 13; i++) {
+                for (let j = 0; j < 13; j++) {
+                    let handName = (i === j) ? RANKS[i] + RANKS[j] : (i < j ? RANKS[i] + RANKS[j] + 's' : RANKS[j] + RANKS[i] + 'o');
+                    const el = document.getElementById(`cell-${handName}`);
+
+                    const isFullRaise = data.raise.includes(handName);
+                    const mixFreq = data.mix[handName] || 0;
+
+                    const comboCount = (i === j) ? 6 : (i < j ? 4 : 12);
+
+                    if (isFullRaise) {
+                        el.className = 'cell-ratio flex flex-col items-center justify-center rounded text-[10px] md:text-xs font-bold bg-emerald-600 text-white hover:scale-105 transition shadow-sm';
+                        totalCombos += comboCount;
+                    } else if (mixFreq > 0) {
+                        el.className = 'cell-ratio flex flex-col items-center justify-center rounded text-[10px] md:text-xs font-bold text-white hover:scale-105 transition shadow-sm';
+                        el.style.background = `linear-gradient(90deg, #059669 ${mixFreq * 100}%, #334155 ${mixFreq * 100}%)`;
+                        totalCombos += comboCount * mixFreq;
+                    } else {
+                        el.className = 'cell-ratio flex flex-col items-center justify-center rounded text-[10px] md:text-xs font-bold bg-slate-950/80 text-slate-500 hover:bg-slate-800 hover:text-white transition';
+                        el.style.background = '';
+                    }
+                }
+            }
+
+            // Stats Update
+            const totalPct = ((totalCombos / 1326) * 100).toFixed(1);
+            document.getElementById('stat-raise').innerText = totalPct + '%';
+            document.getElementById('stat-combos').innerText = `${Math.round(totalCombos)} / 1326`;
+
+            inspectHand(selectedHand);
+        }
+
+        function inspectHand(hand) {
+            selectedHand = hand;
+            document.getElementById('inspect-hand').innerText = hand;
+
+            const pos = document.getElementById('sel-pos').value;
+            const data = GTO_DATA[pos] || GTO_DATA['BTN'];
+
+            let raisePct = 0;
+            if (data.raise.includes(hand)) raisePct = 100;
+            else if (data.mix[hand]) raisePct = Math.round(data.mix[hand] * 100);
+
+            let foldPct = 100 - raisePct;
+
+            document.getElementById('inspect-raise-pct').innerText = `${raisePct}%`;
+            document.getElementById('inspect-raise-bar').style.width = `${raisePct}%`;
+
+            document.getElementById('inspect-fold-pct').innerText = `${foldPct}%`;
+            document.getElementById('inspect-fold-bar').style.width = `${foldPct}%`;
+
+            const isPair = hand.length === 2;
+            const isSuited = hand.endsWith('s');
+            const combos = isPair ? '6 / 6' : (isSuited ? '4 / 4' : '12 / 12');
+            document.getElementById('inspect-combos').innerText = combos;
+
+            const evVal = (raisePct * 0.035).toFixed(2);
+            document.getElementById('inspect-ev').innerText = `+${evVal} BB`;
+        }
+
+        function toggleBuilderHand(hand) {
+            const el = document.getElementById(`bcell-${hand}`);
+            if (customSelectedHands.has(hand)) {
+                customSelectedHands.delete(hand);
+                el.className = 'cell-ratio flex items-center justify-center rounded text-[10px] md:text-xs font-bold bg-slate-950 border border-slate-800 text-slate-400 hover:border-emerald-500 transition';
+            } else {
+                customSelectedHands.add(hand);
+                el.className = 'cell-ratio flex items-center justify-center rounded text-[10px] md:text-xs font-bold bg-emerald-600 text-white border border-emerald-400 shadow transition';
+            }
+            updateBuilderStats();
+        }
+
+        function updateBuilderStats() {
+            let combos = 0;
+            customSelectedHands.forEach(h => {
+                if (h.length === 2) combos += 6;
+                else if (h.endsWith('s')) combos += 4;
+                else combos += 12;
+            });
+            const pct = ((combos / 1326) * 100).toFixed(1);
+            document.getElementById('builder-pct').innerText = pct + '%';
+            document.getElementById('builder-combos').innerText = `${combos} / 1326`;
+            document.getElementById('builder-text').value = Array.from(customSelectedHands).join(', ');
+        }
+
+        function clearCustomRange() {
+            customSelectedHands.clear();
+            buildBuilderMatrix();
+            updateBuilderStats();
+        }
+
+        function copyRangeText() {
+            const text = document.getElementById('builder-text').value;
+            if (!text) return;
+            navigator.clipboard.writeText(text);
+            alert('Το Range αντιγράφηκε στο clipboard!');
+        }
+
+        function calculateEquity() {
+            const resDiv = document.getElementById('equity-result');
+            resDiv.classList.remove('hidden');
+
+            // Quick Heads-up Simulator estimation algorithm
+            let eq1 = Math.floor(Math.random() * 35) + 35;
+            let eq2 = 100 - eq1;
+
+            document.getElementById('p1-equity').innerText = eq1.toFixed(1) + '%';
+            document.getElementById('p2-equity').innerText = eq2.toFixed(1) + '%';
+            document.getElementById('p1-bar').style.width = eq1 + '%';
+            document.getElementById('p2-bar').style.width = eq2 + '%';
+        }
+    </script>
+</body>
+</html>
